@@ -4,12 +4,15 @@ import android.R
 import android.app.*
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
+import android.media.MediaRecorder
 import android.net.Uri
-import android.os.Build
-import android.os.IBinder
+import android.os.*
 import android.telephony.SmsManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.amap.api.location.AMapLocation
 import com.amap.api.location.AMapLocationClient
 import com.amap.api.location.AMapLocationClientOption
@@ -21,6 +24,9 @@ import com.amap.api.services.geocoder.GeocodeResult
 import com.amap.api.services.geocoder.GeocodeSearch
 import com.amap.api.services.geocoder.RegeocodeQuery
 import com.amap.api.services.geocoder.RegeocodeResult
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.*
 import kotlin.math.roundToInt
 
 class LocationService : Service(), AMapLocationListener {
@@ -28,147 +34,218 @@ class LocationService : Service(), AMapLocationListener {
     private var locationClient: AMapLocationClient? = null
     private val CHANNEL_ID = "LocationServiceChannel"
     private var lastAlertTime = 0L
+    
+    private var mediaRecorder: MediaRecorder? = null
+    private var isRecording = false
+    private var isGuardianActive = false
+    private var isTestMode = false
 
     override fun onCreate() {
         super.onCreate()
-        AMapLocationClient.updatePrivacyShow(applicationContext, true, true)
-        AMapLocationClient.updatePrivacyAgree(applicationContext, true)
         createNotificationChannel()
-        startForeground(1, createNotification())
         
+        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        } else 0
+
         try {
-            initLocation()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(1, createNotification("守护服务已就绪"), type)
+            } else {
+                startForeground(1, createNotification("守护服务已就绪"))
+            }
         } catch (e: Exception) {
-            Log.e("LocationService", "Init location failed: ${e.message}")
+            Log.e("LocationService", "Foreground error: ${e.message}")
         }
     }
 
     private fun initLocation() {
+        if (locationClient != null) return
+        AMapLocationClient.updatePrivacyShow(applicationContext, true, true)
+        AMapLocationClient.updatePrivacyAgree(applicationContext, true)
+        
         locationClient = AMapLocationClient(applicationContext)
-        val option = AMapLocationClientOption()
-        option.locationMode = AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
-        option.interval = 10000 // 10秒检测一次
-        option.isNeedAddress = true
+        val option = AMapLocationClientOption().apply {
+            locationMode = AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
+            interval = 10000 
+            isNeedAddress = true
+        }
         locationClient?.setLocationOption(option)
         locationClient?.setLocationListener(this)
         locationClient?.startLocation()
+        
+        isGuardianActive = true
+        isTestMode = false
+        getSharedPreferences("state", MODE_PRIVATE).edit().putBoolean("is_guardian_active", true).apply()
+        updateNotification("【正在实时守护中】")
     }
 
     override fun onLocationChanged(location: AMapLocation?) {
-        if (location == null) return
-        
-        if (location.errorCode != 0) {
-            Log.e("LocationService", "定位失败! 错误码: ${location.errorCode}")
-            return
-        }
+        if (!isGuardianActive || isTestMode || location == null || location.errorCode != 0) return
 
         val prefs = getSharedPreferences("config", Context.MODE_PRIVATE)
         val targetLat = prefs.getFloat("lat", 0f).toDouble()
         val targetLng = prefs.getFloat("lng", 0f).toDouble()
         val safeDistance = prefs.getFloat("distance", 500f)
-        val phoneNumber = prefs.getString("phone", "") ?: ""
-
-        if (targetLat == 0.0 || phoneNumber.isEmpty()) return
+        
+        if (targetLat == 0.0) return
 
         val distance = AMapUtils.calculateLineDistance(
             LatLng(location.latitude, location.longitude),
             LatLng(targetLat, targetLng)
         )
 
-        // 调试日志：确认后台在运行
-        Log.d("LocationService", "距离中心: ${distance.roundToInt()}米, 安全半径: ${safeDistance}米")
-
         if (distance > safeDistance) {
             val currentTime = System.currentTimeMillis()
-            // 报警冷却：每分钟最多报警一次
             if (currentTime - lastAlertTime > 60000) {
                 lastAlertTime = currentTime
+                val phoneNumber = prefs.getString("phone", "") ?: ""
                 performDirectAlert(location, distance.roundToInt(), phoneNumber, prefs)
+                if (prefs.getBoolean("alert_record", true)) startRecording()
             }
+        } else {
+            if (isRecording) stopRecording()
         }
     }
 
+    private fun startRecording(retryCount: Int = 0) {
+        if (isRecording) return
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            Log.e("LocationService", "No RECORD_AUDIO permission")
+            return
+        }
+
+        try {
+            val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+            val musicDir = getExternalFilesDir(Environment.DIRECTORY_MUSIC)
+            val file = File(musicDir, "KIDS_REC_$timeStamp.mp4")
+
+            mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(this) else MediaRecorder()
+            mediaRecorder?.apply {
+                setAudioSource(MediaRecorder.AudioSource.MIC)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setAudioSamplingRate(44100)
+                setAudioEncodingBitRate(96000)
+                setAudioChannels(1)
+                setOutputFile(file.absolutePath)
+                prepare()
+                start()
+            }
+            isRecording = true
+            Log.d("LocationService", "Recording SUCCESS: ${file.absolutePath}")
+            updateNotification(if(isTestMode) "测试录音中..." else "检测到异常：正在录音")
+        } catch (e: Exception) {
+            Log.e("LocationService", "Recording FAILED (Retry $retryCount): ${e.message}")
+            if (retryCount < 3) {
+                Handler(Looper.getMainLooper()).postDelayed({ startRecording(retryCount + 1) }, 1000)
+            }
+            isRecording = false
+        }
+    }
+
+    private fun stopRecording() {
+        try {
+            mediaRecorder?.apply {
+                stop()
+                reset()
+                release()
+            }
+            mediaRecorder = null
+            isRecording = false
+            Log.d("LocationService", "Recording STOPPED")
+        } catch (e: Exception) { Log.e("LocationService", "Stop Rec error: ${e.message}") }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val cmd = intent?.getStringExtra("COMMAND")
+        Log.d("LocationService", "Receive CMD: $cmd")
+        when (cmd) {
+            "START_GUARDIAN" -> initLocation()
+            "TEST_RECORD" -> {
+                isTestMode = true
+                isGuardianActive = false
+                updateNotification("测试模式：录音验证")
+                startRecording()
+                Timer().schedule(object : TimerTask() {
+                    override fun run() {
+                        stopRecording()
+                        if (isTestMode) {
+                            stopForeground(true)
+                            stopSelf()
+                        }
+                    }
+                }, 10000)
+            }
+            "STOP_SELF" -> {
+                getSharedPreferences("state", MODE_PRIVATE).edit().putBoolean("is_guardian_active", false).apply()
+                stopForeground(true)
+                stopSelf()
+            }
+        }
+        return START_STICKY
+    }
+
     private fun performDirectAlert(location: AMapLocation, distance: Int, phoneNumber: String, prefs: android.content.SharedPreferences) {
+        if (phoneNumber.isEmpty()) return
         val geocoder = GeocodeSearch(this)
         val query = RegeocodeQuery(LatLonPoint(location.latitude, location.longitude), 200f, GeocodeSearch.AMAP)
-        
         geocoder.setOnGeocodeSearchListener(object : GeocodeSearch.OnGeocodeSearchListener {
-            override fun onRegeocodeSearched(result: RegeocodeResult?, rCode: Int) {
-                val address = if (rCode == 1000 && result?.regeocodeAddress != null) {
-                    result.regeocodeAddress.formatAddress
-                } else {
-                    location.address ?: "坐标(${location.latitude},${location.longitude})"
-                }
-
-                val content = "【儿童守护报警】孩子已离开安全区域 ${distance}米！孩子位置：$address"
-                val alertCall = prefs.getBoolean("alert_call", true)
-                val alertSms = prefs.getBoolean("alert_sms", false)
-
-                Log.d("LocationService", "触发自动报警: 拨号=$alertCall, 短信=$alertSms")
-
-                // 直接执行，不再通过应用内通知确认
-                if (alertSms) sendSms(phoneNumber, content)
-                if (alertCall) makeCall(phoneNumber)
+            override fun onRegeocodeSearched(result: RegeocodeResult, rCode: Int) {
+                val address = if (rCode == 1000) result.regeocodeAddress.formatAddress else "位置解析中"
+                val content = "【报警】孩子离开安全区 ${distance}米！位置：$address"
+                if (prefs.getBoolean("alert_sms", false)) sendSms(phoneNumber, content)
+                if (prefs.getBoolean("alert_call", true)) makeCall(phoneNumber)
             }
-            override fun onGeocodeSearched(result: GeocodeResult?, rCode: Int) {}
+            override fun onGeocodeSearched(result: GeocodeResult, rCode: Int) {}
         })
         geocoder.getFromLocationAsyn(query)
     }
 
     private fun makeCall(phoneNumber: String) {
-        val intent = Intent(Intent.ACTION_CALL)
-        intent.data = Uri.parse("tel:$phoneNumber")
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        try {
-            startActivity(intent)
-        } catch (e: Exception) {
-            // 回退到拨号盘
-            val dialIntent = Intent(Intent.ACTION_DIAL)
-            dialIntent.data = Uri.parse("tel:$phoneNumber")
-            dialIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            startActivity(dialIntent)
+        val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$phoneNumber")).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+        try { startActivity(intent) } catch (e: Exception) { 
+            startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phoneNumber")).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }) 
         }
     }
 
     private fun sendSms(phoneNumber: String, content: String) {
         try {
-            val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                this.getSystemService(SmsManager::class.java)
-            } else {
-                @Suppress("DEPRECATION")
-                SmsManager.getDefault()
-            }
-            // 发送短信：如果系统弹窗，请在手机设置中将该应用的短信权限设为“始终允许”
+            val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) this.getSystemService(SmsManager::class.java) else SmsManager.getDefault()
             smsManager?.sendTextMessage(phoneNumber, null, content, null, null)
-            Log.d("LocationService", "短信已提交发送队列")
-        } catch (e: Exception) {
-            Log.e("LocationService", "短信发送失败: ${e.message}")
-        }
+        } catch (e: Exception) { Log.e("LocationService", "SMS error: ${e.message}") }
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
-            manager?.createNotificationChannel(NotificationChannel(
-                CHANNEL_ID, "位置守护服务", NotificationManager.IMPORTANCE_LOW
-            ))
+            manager?.createNotificationChannel(NotificationChannel(CHANNEL_ID, "位置守护服务", NotificationManager.IMPORTANCE_LOW))
         }
     }
 
-    private fun createNotification(): Notification {
+    private fun createNotification(content: String): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("守护进行中")
-            .setContentText("正在实时监测孩子位置安全")
+            .setContentTitle("儿童安全守护")
+            .setContentText(content)
             .setSmallIcon(R.drawable.ic_menu_mylocation)
             .build()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    private fun updateNotification(content: String) {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(1, createNotification(content))
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
-        super.onDestroy()
+        Log.d("LocationService", "Service Destroyed")
+        isGuardianActive = false
+        if (isRecording) stopRecording()
         locationClient?.stopLocation()
+        locationClient?.unRegisterLocationListener(this)
         locationClient?.onDestroy()
+        locationClient = null
+        super.onDestroy()
     }
 }
