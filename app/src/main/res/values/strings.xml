@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">儿童安全守护</string>
+    <string name="accessibility_description">用于实时监测系统卸载行为，防止应用被恶意停止，守护儿童安全。</string>
+</resources>
