@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.telephony.SmsManager
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -32,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GppMaybe
 import androidx.compose.material.icons.filled.Lock
@@ -48,6 +50,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -343,6 +346,52 @@ fun ConfigScreen() {
             Icon(if(isAdminActive) Icons.Default.Shield else Icons.Default.GppMaybe, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
             Text(if (isAdminActive) "防卸载保护：已开启" else "立即开启防卸载保护(必须)")
+        }
+
+        // 测试报警按钮
+        OutlinedButton(
+            onClick = {
+                if (phoneNumber.isEmpty()) {
+                    Toast.makeText(context, "请先填写家长电话", Toast.LENGTH_SHORT).show()
+                    return@OutlinedButton
+                }
+                Toast.makeText(context, "正在发起测试报警...", Toast.LENGTH_SHORT).show()
+                
+                // 执行测试逻辑
+                if (alertSms) {
+                    try {
+                        val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            context.getSystemService(SmsManager::class.java)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            SmsManager.getDefault()
+                        }
+                        smsManager?.sendTextMessage(phoneNumber, null, "【儿童守护测试】这是一条模拟报警短信，孩子目前安全。", null, null)
+                        Toast.makeText(context, "测试短信已发出", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "短信发送失败: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+                
+                if (alertCall) {
+                    val intent = Intent(Intent.ACTION_CALL)
+                    intent.data = Uri.parse("tel:$phoneNumber")
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        val dialIntent = Intent(Intent.ACTION_DIAL)
+                        dialIntent.data = Uri.parse("tel:$phoneNumber")
+                        dialIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(dialIntent)
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+        ) {
+            Icon(Icons.Default.BugReport, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("测试报警 (模拟触发电话/短信)")
         }
 
         if (isServiceActive) {
