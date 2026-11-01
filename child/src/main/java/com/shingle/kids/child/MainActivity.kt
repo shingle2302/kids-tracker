@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.amap.api.location.AMapLocationClient
+import com.amap.api.location.AMapLocationClientOption
 
 class MainActivity : ComponentActivity() {
 
@@ -43,6 +45,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
+        AMapLocationClient.updatePrivacyShow(applicationContext, true, true)
+        AMapLocationClient.updatePrivacyAgree(applicationContext, true)
 
         val permissions = mutableListOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -111,38 +116,57 @@ fun ChildMainScreen() {
                     )
                     Button(
                         onClick = {
-                            scope.launch(Dispatchers.IO) {
-                                try {
-                                    val api = com.shingle.kids.core.api.ApiService.getInstance(serverUrlInput)
-                                    val response = api.reportLocation(
-                                        com.shingle.kids.core.api.LocationReportRequest(
-                                            pairingCode = pairingCode,
-                                            latitude = 39.9087,
-                                            longitude = 116.3975,
-                                            address = "北京天安门广场 (示例位置)",
-                                            batteryLevel = 98
-                                        )
-                                    )
-                                    withContext(Dispatchers.Main) {
-                                        if (response.isSuccessful) {
-                                            reportStatusText = "位置成功上报至后端！(天安门广场 39.9087, 116.3975)"
-                                            Toast.makeText(context, "上报成功！家长端刷新即可看到地图标记", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            reportStatusText = "上报失败: HTTP ${response.code()}"
+                            reportStatusText = "正在触发高德 GPS 定位..."
+                            try {
+                                val locationClient = AMapLocationClient(context)
+                                val option = AMapLocationClientOption().apply {
+                                    locationMode = AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
+                                    isOnceLocation = true
+                                    isNeedAddress = true
+                                }
+                                locationClient.setLocationOption(option)
+                                locationClient.setLocationListener { location ->
+                                    if (location != null && location.errorCode == 0) {
+                                        scope.launch(Dispatchers.IO) {
+                                            try {
+                                                val api = com.shingle.kids.core.api.ApiService.getInstance(serverUrlInput)
+                                                val response = api.reportLocation(
+                                                    com.shingle.kids.core.api.LocationReportRequest(
+                                                        pairingCode = pairingCode,
+                                                        latitude = location.latitude,
+                                                        longitude = location.longitude,
+                                                        address = location.address.ifEmpty { "未知真实地址" },
+                                                        batteryLevel = 100
+                                                    )
+                                                )
+                                                withContext(Dispatchers.Main) {
+                                                    if (response.isSuccessful) {
+                                                        reportStatusText = "真实位置成功上报云端！\n地址：${location.address}\n(经度:${location.longitude}, 纬度:${location.latitude})"
+                                                        Toast.makeText(context, "真实定位已同步云端！家长端刷新即可在地图显示", Toast.LENGTH_SHORT).show()
+                                                    } else {
+                                                        reportStatusText = "上报失败: HTTP ${response.code()}"
+                                                    }
+                                                }
+                                            } catch (e: Exception) {
+                                                withContext(Dispatchers.Main) {
+                                                    reportStatusText = "上报异常: ${e.message}"
+                                                }
+                                            }
                                         }
-                                    }
-                                } catch (e: Exception) {
-                                    withContext(Dispatchers.Main) {
-                                        reportStatusText = "上报异常: ${e.message}"
+                                    } else {
+                                        reportStatusText = "定位失败 (错误码:${location?.errorCode}, 原因:${location?.errorInfo})"
                                     }
                                 }
+                                locationClient.startLocation()
+                            } catch (e: Throwable) {
+                                reportStatusText = "启动定位异常: ${e.message}"
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Default.MyLocation, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("手动上报当前位置到云端")
+                        Text("获取并上报当前高德真实 GPS 位置")
                     }
                     Text(reportStatusText, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
