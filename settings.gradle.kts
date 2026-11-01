@@ -23,4 +23,6 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Kids GPS Tracker"
-include(":app")
+include(":core")
+include(":parent")
+include(":child")
