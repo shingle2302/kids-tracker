@@ -8,7 +8,7 @@ lifecycleRuntimeKtx = "2.6.1"
 activityCompose = "1.8.0"
 kotlin = "2.2.10"
 composeBom = "2024.09.00"
-amap-map = "10.0.900"
+amap-map = "9.8.3"
 amap-location = "6.4.1"
 
 [libraries]

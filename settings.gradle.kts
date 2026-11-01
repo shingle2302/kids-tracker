@@ -19,6 +19,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven { url = uri("https://repo.autonavi.com/nexus/content/repositories/releases/") }
     }
 }
 
@@ -26,3 +27,4 @@ rootProject.name = "Kids GPS Tracker"
 include(":core")
 include(":parent")
 include(":child")
+include(":backend")
