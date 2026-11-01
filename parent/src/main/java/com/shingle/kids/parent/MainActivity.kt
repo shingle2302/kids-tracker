@@ -63,8 +63,9 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ParentMainScreen(savedInstanceState: Bundle?) {
-    var pairingCodeInput by remember { mutableStateOf("") }
-    var connectedChildName by remember { mutableStateOf("暂无绑定设备") }
+    var pairingCodeInput by remember { mutableStateOf("888888") }
+    var connectedChildInfo by remember { mutableStateOf("暂无绑定设备") }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -97,16 +98,39 @@ fun ParentMainScreen(savedInstanceState: Bundle?) {
                     Button(
                         onClick = {
                             if (pairingCodeInput.isNotEmpty()) {
-                                connectedChildName = "已成功连接设备: 孩子手机 ($pairingCodeInput)"
+                                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                    try {
+                                        val response = com.shingle.kids.core.api.ApiService.instance.pairDevice(
+                                            com.shingle.kids.core.api.PairRequest(
+                                                pairingCode = pairingCodeInput,
+                                                childName = "宝宝手机",
+                                                parentPhone = "13800000000"
+                                            )
+                                        )
+                                        if (response.isSuccessful) {
+                                            val statusRes = com.shingle.kids.core.api.ApiService.instance.getDeviceStatus(pairingCodeInput)
+                                            if (statusRes.isSuccessful) {
+                                                val dev = statusRes.body()?.device
+                                                connectedChildInfo = "已连接: ${dev?.childName} | 位置: ${dev?.lastAddress ?: "未定位"} | 电量: ${dev?.batteryLevel}%"
+                                            } else {
+                                                connectedChildInfo = "配对成功，但获取设备状态失败"
+                                            }
+                                        } else {
+                                            connectedChildInfo = "配对请求失败"
+                                        }
+                                    } catch (e: Exception) {
+                                        connectedChildInfo = "连接后端异常: ${e.message}"
+                                    }
+                                }
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Default.Link, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("确认绑定与连接")
+                        Text("连接后端并同步设备")
                     }
-                    Text(connectedChildName, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(connectedChildInfo, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
             }
 

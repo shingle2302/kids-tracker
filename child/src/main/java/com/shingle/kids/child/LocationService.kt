@@ -95,6 +95,25 @@ class LocationService : Service(), AMapLocationListener {
     override fun onLocationChanged(location: AMapLocation?) {
         if (!isGuardianActive || isTestMode || location == null || location.errorCode != 0) return
 
+        // 异步上报位置到后端
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                val prefs = getSharedPreferences("config", Context.MODE_PRIVATE)
+                val pairingCode = prefs.getString("pairing_code", "888888") ?: "888888"
+                com.shingle.kids.core.api.ApiService.instance.reportLocation(
+                    com.shingle.kids.core.api.LocationReportRequest(
+                        pairingCode = pairingCode,
+                        latitude = location.latitude,
+                        longitude = location.longitude,
+                        address = location.address ?: "未知地址",
+                        batteryLevel = 100
+                    )
+                )
+            } catch (e: Exception) {
+                Log.e("LocationService", "Report location error: ${e.message}")
+            }
+        }
+
         val prefs = getSharedPreferences("config", Context.MODE_PRIVATE)
         val targetLat = prefs.getFloat("lat", 0f).toDouble()
         val targetLng = prefs.getFloat("lng", 0f).toDouble()
