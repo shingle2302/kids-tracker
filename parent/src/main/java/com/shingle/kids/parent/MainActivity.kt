@@ -64,7 +64,7 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ParentMainScreen(savedInstanceState: Bundle?) {
-    var serverUrlInput by remember { mutableStateOf("http://10.0.2.2:8080/") }
+    var serverUrlInput by remember { mutableStateOf("http://192.168.100.101:8080/") }
     var pairingCodeInput by remember { mutableStateOf("888888") }
     var connectedChildInfo by remember { mutableStateOf("暂无绑定设备") }
     val scope = rememberCoroutineScope()

@@ -102,7 +102,7 @@ interface ApiService {
     suspend fun sendCommand(@Query("pairingCode") pairingCode: String, @Query("type") type: String): Response<Map<String, Any>>
 
     companion object {
-        var baseUrl = "http://10.0.2.2:8080/"
+        var baseUrl = "http://192.168.100.101:8080/"
         var authToken: String? = null
 
         private val client by lazy {
