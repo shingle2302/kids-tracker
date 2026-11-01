@@ -64,6 +64,7 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ParentMainScreen(savedInstanceState: Bundle?) {
+    var serverUrlInput by remember { mutableStateOf("http://10.0.2.2:8080/") }
     var pairingCodeInput by remember { mutableStateOf("888888") }
     var connectedChildInfo by remember { mutableStateOf("暂无绑定设备") }
     val scope = rememberCoroutineScope()
@@ -89,6 +90,14 @@ fun ParentMainScreen(savedInstanceState: Bundle?) {
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("后端服务配置", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    OutlinedTextField(
+                        value = serverUrlInput,
+                        onValueChange = { serverUrlInput = it },
+                        label = { Text("后端服务 URL (模拟器用 10.0.2.2, 真机用局域网IP)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text("绑定孩子设备", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     OutlinedTextField(
                         value = pairingCodeInput,
@@ -101,7 +110,8 @@ fun ParentMainScreen(savedInstanceState: Bundle?) {
                             if (pairingCodeInput.isNotEmpty()) {
                                 scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                                     try {
-                                        val response = com.shingle.kids.core.api.ApiService.instance.pairDevice(
+                                        val api = com.shingle.kids.core.api.ApiService.getInstance(serverUrlInput)
+                                        val response = api.pairDevice(
                                             com.shingle.kids.core.api.PairRequest(
                                                 pairingCode = pairingCodeInput,
                                                 childName = "宝宝手机",
@@ -109,7 +119,7 @@ fun ParentMainScreen(savedInstanceState: Bundle?) {
                                             )
                                         )
                                         if (response.isSuccessful) {
-                                            val statusRes = com.shingle.kids.core.api.ApiService.instance.getDeviceStatus(pairingCodeInput)
+                                            val statusRes = api.getDeviceStatus(pairingCodeInput)
                                             if (statusRes.isSuccessful) {
                                                 val dev = statusRes.body()?.device
                                                 connectedChildInfo = "已连接: ${dev?.childName} | 位置: ${dev?.lastAddress ?: "未定位"} | 电量: ${dev?.batteryLevel}%"
@@ -117,7 +127,7 @@ fun ParentMainScreen(savedInstanceState: Bundle?) {
                                                 connectedChildInfo = "配对成功，但获取设备状态失败"
                                             }
                                         } else {
-                                            connectedChildInfo = "配对请求失败"
+                                            connectedChildInfo = "配对请求失败: HTTP ${response.code()}"
                                         }
                                     } catch (e: Exception) {
                                         connectedChildInfo = "连接后端异常: ${e.message}"

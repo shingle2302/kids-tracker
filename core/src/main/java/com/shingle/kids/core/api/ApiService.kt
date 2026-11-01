@@ -7,6 +7,7 @@ import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.*
+import java.util.concurrent.TimeUnit
 
 data class PairRequest(
     val pairingCode: String,
@@ -101,12 +102,14 @@ interface ApiService {
     suspend fun sendCommand(@Query("pairingCode") pairingCode: String, @Query("type") type: String): Response<Map<String, Any>>
 
     companion object {
-        private const val BASE_URL = "http://192.168.100.101:8080/"
+        var baseUrl = "http://10.0.2.2:8080/"
         var authToken: String? = null
 
         private val client by lazy {
             val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY }
             OkHttpClient.Builder()
+                .connectTimeout(5, TimeUnit.SECONDS)
+                .readTimeout(5, TimeUnit.SECONDS)
                 .addInterceptor(logging)
                 .addInterceptor(Interceptor { chain ->
                     val original = chain.request()
@@ -123,13 +126,18 @@ interface ApiService {
                 .build()
         }
 
-        val instance: ApiService by lazy {
-            Retrofit.Builder()
-                .baseUrl(BASE_URL)
+        fun getInstance(customUrl: String? = null): ApiService {
+            val url = customUrl?.takeIf { it.isNotBlank() } ?: baseUrl
+            val formattedUrl = if (url.endsWith("/")) url else "$url/"
+            return Retrofit.Builder()
+                .baseUrl(formattedUrl)
                 .client(client)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build()
                 .create(ApiService::class.java)
         }
+
+        val instance: ApiService
+            get() = getInstance()
     }
 }
