@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -26,6 +27,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -133,7 +136,50 @@ fun ChildMainScreen(
     var serverUrlInput by remember { mutableStateOf("http://192.168.100.101:8080/") }
     var pairingCode by remember { mutableStateOf(getOrCreatePairingCode(context)) }
     var reportStatusText by remember { mutableStateOf("未上报位置") }
+    var showPasswordDialog by remember { mutableStateOf(false) }
+    var inputPassword by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+
+    if (showPasswordDialog) {
+        AlertDialog(
+            onDismissRequest = { showPasswordDialog = false; inputPassword = "" },
+            title = { Text("家长管理密码验证", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("为了防止非授权重置配对码，请输入家长管理密码（默认密码：123456）：", fontSize = 14.sp)
+                    OutlinedTextField(
+                        value = inputPassword,
+                        onValueChange = { inputPassword = it },
+                        label = { Text("密码") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val prefs = context.getSharedPreferences("config", Context.MODE_PRIVATE)
+                    val savedPassword = prefs.getString("admin_password", "123456") ?: "123456"
+                    if (inputPassword == savedPassword) {
+                        pairingCode = generateNewPairingCode(context)
+                        showPasswordDialog = false
+                        inputPassword = ""
+                        Toast.makeText(context, "密码正确，已生成全新的随机配对码！", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "密码错误，无法重新生成配对码！", Toast.LENGTH_SHORT).show()
+                    }
+                }) {
+                    Text("确认重置")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPasswordDialog = false; inputPassword = "" }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -156,7 +202,7 @@ fun ChildMainScreen(
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("当前设备随机配对码 (独一无二安全防防盗)", fontSize = 14.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text("当前设备随机配对码 (防盗防越权绑定)", fontSize = 14.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -164,13 +210,12 @@ fun ChildMainScreen(
                     ) {
                         Text(pairingCode, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         IconButton(onClick = {
-                            pairingCode = generateNewPairingCode(context)
-                            Toast.makeText(context, "已生成全新的随机配对码！", Toast.LENGTH_SHORT).show()
+                            showPasswordDialog = true
                         }) {
                             Icon(Icons.Default.Refresh, contentDescription = "重新生成配对码", tint = MaterialTheme.colorScheme.primary)
                         }
                     }
-                    Text("家长端必须输入此随机配对码后方可连接与守护。", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text("家长端必须输入此随机配对码方可完成首次连接。", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     Spacer(modifier = Modifier.height(4.dp))
                     Text("后端服务 URL (模拟器用 10.0.2.2, 真机用局域网IP)", fontSize = 12.sp)
                     OutlinedTextField(
