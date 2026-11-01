@@ -22,6 +22,7 @@
     <application
         android:allowBackup="true"
         android:usesCleartextTraffic="true"
+        android:extractNativeLibs="true"
         android:icon="@mipmap/ic_launcher"
         android:label="儿童安全守护(孩子端)"
         android:roundIcon="@mipmap/ic_launcher_round"
