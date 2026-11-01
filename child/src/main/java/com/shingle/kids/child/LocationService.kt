@@ -93,10 +93,19 @@ class LocationService : Service(), AMapLocationListener {
         stopSelf()
     }
 
+    private fun getBatteryLevel(): Int {
+        return try {
+            val bm = getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
+            bm?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: 100
+        } catch (e: Exception) {
+            100
+        }
+    }
+
     override fun onLocationChanged(location: AMapLocation?) {
         if (!isGuardianActive || isTestMode || location == null || location.errorCode != 0) return
 
-        // 异步上报位置到后端
+        // 异步上报真实位置与真实电量到后端
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             try {
                 val prefs = getSharedPreferences("config", Context.MODE_PRIVATE)
@@ -107,7 +116,7 @@ class LocationService : Service(), AMapLocationListener {
                         latitude = location.latitude,
                         longitude = location.longitude,
                         address = location.address ?: "未知地址",
-                        batteryLevel = 100
+                        batteryLevel = getBatteryLevel()
                     )
                 )
             } catch (e: Exception) {

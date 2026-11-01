@@ -162,6 +162,8 @@ fun ChildMainScreen(
                                     if (location != null && location.errorCode == 0) {
                                         scope.launch(Dispatchers.IO) {
                                             try {
+                                                val bm = context.getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
+                                                val currentBattery = bm?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: 100
                                                 val api = com.shingle.kids.core.api.ApiService.getInstance(serverUrlInput)
                                                 val response = api.reportLocation(
                                                     com.shingle.kids.core.api.LocationReportRequest(
@@ -169,7 +171,7 @@ fun ChildMainScreen(
                                                         latitude = location.latitude,
                                                         longitude = location.longitude,
                                                         address = location.address.ifEmpty { "未知真实地址" },
-                                                        batteryLevel = 100
+                                                        batteryLevel = currentBattery
                                                     )
                                                 )
                                                 withContext(Dispatchers.Main) {
