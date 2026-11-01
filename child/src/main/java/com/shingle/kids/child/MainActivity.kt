@@ -5,6 +5,7 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -26,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -34,11 +36,31 @@ import com.amap.api.location.AMapLocationClientOption
 
 class MainActivity : ComponentActivity() {
 
+    private val requestBackgroundLocationLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            Toast.makeText(this, "已获得后台定位权限 (始终允许)", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "请在系统设置中将定位权限设置为“始终允许”", Toast.LENGTH_LONG).show()
+        }
+    }
+
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
-        if (!results.all { it.value }) {
-            Toast.makeText(this, "需授权以开启完整守护", Toast.LENGTH_SHORT).show()
+        if (results.values.all { it }) {
+            checkAndRequestBackgroundLocation()
+        } else {
+            Toast.makeText(this, "请授予定位与通知权限以开启完整守护", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun checkAndRequestBackgroundLocation() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                requestBackgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            }
         }
     }
 
@@ -57,9 +79,6 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.SEND_SMS,
             Manifest.permission.RECORD_AUDIO
         ).apply {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 add(Manifest.permission.POST_NOTIFICATIONS)
             }
@@ -69,7 +88,18 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                ChildMainScreen()
+                ChildMainScreen(
+                    onRequestPermissions = {
+                        requestPermissionLauncher.launch(permissions)
+                    },
+                    onRequestBackgroundLocation = {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            requestBackgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                        } else {
+                            Toast.makeText(this, "当前系统版本无需单独开通后台定位权限", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
             }
         }
     }
@@ -77,7 +107,10 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChildMainScreen() {
+fun ChildMainScreen(
+    onRequestPermissions: () -> Unit = {},
+    onRequestBackgroundLocation: () -> Unit = {}
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var serverUrlInput by remember { mutableStateOf("http://192.168.100.101:8080/") }
     var pairingCode by remember { mutableStateOf("888888") }
@@ -177,6 +210,24 @@ fun ChildMainScreen() {
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("安全防护与权限设置", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+
+                    OutlinedButton(
+                        onClick = onRequestPermissions,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.LocationOn, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("点击授予常规前台定位/通知权限")
+                    }
+
+                    OutlinedButton(
+                        onClick = onRequestBackgroundLocation,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Map, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("点击申请后台定位权限 (设置为始终允许)")
+                    }
 
                     Button(onClick = {
                         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
