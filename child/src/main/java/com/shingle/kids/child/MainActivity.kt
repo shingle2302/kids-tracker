@@ -13,7 +13,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,13 +21,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import kotlinx.coroutines.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
 
@@ -74,8 +74,10 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun ChildMainScreen() {
     val context = androidx.compose.ui.platform.LocalContext.current
+    var serverUrlInput by remember { mutableStateOf("http://192.168.100.101:8080/") }
     var pairingCode by remember { mutableStateOf("888888") }
-    var isGuardianActive by remember { mutableStateOf(false) }
+    var reportStatusText by remember { mutableStateOf("未上报位置") }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -97,12 +99,52 @@ fun ChildMainScreen() {
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                 shape = RoundedCornerShape(16.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("当前绑定配对码", fontSize = 14.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                    Spacer(modifier = Modifier.height(8.dp))
                     Text(pairingCode, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("家长端可通过此配对码实时连接并守护此设备。", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("后端服务 URL (模拟器用 10.0.2.2, 真机用局域网IP)", fontSize = 12.sp)
+                    OutlinedTextField(
+                        value = serverUrlInput,
+                        onValueChange = { serverUrlInput = it },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Button(
+                        onClick = {
+                            scope.launch(Dispatchers.IO) {
+                                try {
+                                    val api = com.shingle.kids.core.api.ApiService.getInstance(serverUrlInput)
+                                    val response = api.reportLocation(
+                                        com.shingle.kids.core.api.LocationReportRequest(
+                                            pairingCode = pairingCode,
+                                            latitude = 39.9087,
+                                            longitude = 116.3975,
+                                            address = "北京天安门广场 (示例位置)",
+                                            batteryLevel = 98
+                                        )
+                                    )
+                                    withContext(Dispatchers.Main) {
+                                        if (response.isSuccessful) {
+                                            reportStatusText = "位置成功上报至后端！(天安门广场 39.9087, 116.3975)"
+                                            Toast.makeText(context, "上报成功！家长端刷新即可看到地图标记", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            reportStatusText = "上报失败: HTTP ${response.code()}"
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) {
+                                        reportStatusText = "上报异常: ${e.message}"
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.MyLocation, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("手动上报当前位置到云端")
+                    }
+                    Text(reportStatusText, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
             }
 
@@ -148,12 +190,11 @@ fun ChildMainScreen() {
                         } else {
                             context.startService(intent)
                         }
-                        isGuardianActive = true
                         Toast.makeText(context, "守护服务已正式启动", Toast.LENGTH_SHORT).show()
                     }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)), modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("3. 正式开启后台守护")
+                        Text("3. 正式开启后台守护服务")
                     }
                 }
             }

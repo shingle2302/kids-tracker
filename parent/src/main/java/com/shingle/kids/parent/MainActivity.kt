@@ -74,6 +74,22 @@ fun ParentMainScreen(savedInstanceState: Bundle?) {
     var aMapInstance by remember { mutableStateOf<com.amap.api.maps.AMap?>(null) }
     val scope = rememberCoroutineScope()
 
+    fun updateMapMarker(lat: Double, lng: Double, title: String, snippet: String) {
+        if (lat != 0.0 && lng != 0.0) {
+            val childLatLng = com.amap.api.maps.model.LatLng(lat, lng)
+            aMapInstance?.clear()
+            aMapInstance?.addMarker(
+                com.amap.api.maps.model.MarkerOptions()
+                    .position(childLatLng)
+                    .title(title)
+                    .snippet(snippet)
+            )
+            aMapInstance?.moveCamera(
+                com.amap.api.maps.CameraUpdateFactory.newLatLngZoom(childLatLng, 16f)
+            )
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -130,19 +146,7 @@ fun ParentMainScreen(savedInstanceState: Bundle?) {
                                                 withContext(Dispatchers.Main) {
                                                     if (dev != null) {
                                                         connectedChildInfo = "已连接: ${dev.childName} | 位置: ${dev.lastAddress.ifEmpty { "未定位" }} | 电量: ${dev.batteryLevel}%"
-                                                        if (dev.lastLatitude != 0.0 && dev.lastLongitude != 0.0) {
-                                                            val childLatLng = com.amap.api.maps.model.LatLng(dev.lastLatitude, dev.lastLongitude)
-                                                            aMapInstance?.clear()
-                                                            aMapInstance?.addMarker(
-                                                                com.amap.api.maps.model.MarkerOptions()
-                                                                    .position(childLatLng)
-                                                                    .title(dev.childName)
-                                                                    .snippet(dev.lastAddress)
-                                                            )
-                                                            aMapInstance?.moveCamera(
-                                                                com.amap.api.maps.CameraUpdateFactory.newLatLngZoom(childLatLng, 16f)
-                                                            )
-                                                        }
+                                                        updateMapMarker(dev.lastLatitude, dev.lastLongitude, dev.childName, dev.lastAddress)
                                                     }
                                                 }
                                             } else {
@@ -169,6 +173,47 @@ fun ParentMainScreen(savedInstanceState: Bundle?) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("连接后端并同步设备位置")
                     }
+
+                    OutlinedButton(
+                        onClick = {
+                            if (pairingCodeInput.isNotEmpty()) {
+                                scope.launch(Dispatchers.IO) {
+                                    try {
+                                        val api = com.shingle.kids.core.api.ApiService.getInstance(serverUrlInput)
+                                        api.reportLocation(
+                                            com.shingle.kids.core.api.LocationReportRequest(
+                                                pairingCode = pairingCodeInput,
+                                                latitude = 39.9087,
+                                                longitude = 116.3975,
+                                                address = "北京天安门广场 (测试位置)",
+                                                batteryLevel = 95
+                                            )
+                                        )
+                                        val statusRes = api.getDeviceStatus(pairingCodeInput)
+                                        if (statusRes.isSuccessful) {
+                                            val dev = statusRes.body()?.device
+                                            withContext(Dispatchers.Main) {
+                                                if (dev != null) {
+                                                    connectedChildInfo = "已连接: ${dev.childName} | 位置: ${dev.lastAddress} | 电量: ${dev.batteryLevel}%"
+                                                    updateMapMarker(dev.lastLatitude, dev.lastLongitude, dev.childName, dev.lastAddress)
+                                                }
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        withContext(Dispatchers.Main) {
+                                            connectedChildInfo = "模拟发包异常: ${e.message}"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Place, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("模拟孩子发包并在地图上标记")
+                    }
+
                     Text(connectedChildInfo, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
             }
