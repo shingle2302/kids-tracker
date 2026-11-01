@@ -65,27 +65,32 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+class MapViewHolder {
+    var aMap: AMap? = null
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ParentMainScreen(savedInstanceState: Bundle?) {
     var serverUrlInput by remember { mutableStateOf("http://192.168.100.101:8080/") }
     var pairingCodeInput by remember { mutableStateOf("888888") }
     var connectedChildInfo by remember { mutableStateOf("暂无绑定设备") }
-    var aMapInstance by remember { mutableStateOf<com.amap.api.maps.AMap?>(null) }
+    val mapHolder = remember { MapViewHolder() }
     val scope = rememberCoroutineScope()
 
     fun updateMapMarker(lat: Double, lng: Double, title: String, snippet: String) {
         if (lat != 0.0 && lng != 0.0) {
-            val childLatLng = com.amap.api.maps.model.LatLng(lat, lng)
-            aMapInstance?.clear()
-            aMapInstance?.addMarker(
-                com.amap.api.maps.model.MarkerOptions()
+            val childLatLng = LatLng(lat, lng)
+            val map = mapHolder.aMap
+            map?.clear()
+            map?.addMarker(
+                MarkerOptions()
                     .position(childLatLng)
                     .title(title)
                     .snippet(snippet)
             )
-            aMapInstance?.moveCamera(
-                com.amap.api.maps.CameraUpdateFactory.newLatLngZoom(childLatLng, 16f)
+            map?.moveCamera(
+                CameraUpdateFactory.newLatLngZoom(childLatLng, 16f)
             )
         }
     }
@@ -233,7 +238,7 @@ fun ParentMainScreen(savedInstanceState: Bundle?) {
                                 MapView(ctx).apply {
                                     onCreate(savedInstanceState)
                                     val map = this.map
-                                    aMapInstance = map
+                                    mapHolder.aMap = map
                                     map?.uiSettings?.isZoomControlsEnabled = true
                                 }
                             },
