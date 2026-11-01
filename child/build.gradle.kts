@@ -48,5 +48,4 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
     implementation(libs.amap.map3d)
     implementation("com.amap.api:search:9.7.1")
-    implementation(libs.amap.loc)
 }

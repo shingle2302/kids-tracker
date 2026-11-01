@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import kotlinx.coroutines.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -72,7 +73,7 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChildMainScreen() {
-    val context = androidx.compose.ui.platform.LocalContext.value
+    val context = androidx.compose.ui.platform.LocalContext.current
     var pairingCode by remember { mutableStateOf("888888") }
     var isGuardianActive by remember { mutableStateOf(false) }
 

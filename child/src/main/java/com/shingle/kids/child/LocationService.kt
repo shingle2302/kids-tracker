@@ -20,6 +20,7 @@ import com.amap.api.maps.model.LatLng
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlinx.coroutines.*
 
 class LocationService : Service(), AMapLocationListener {
 

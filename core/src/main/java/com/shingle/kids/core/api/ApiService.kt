@@ -58,7 +58,7 @@ interface ApiService {
     suspend fun sendCommand(@Query("pairingCode") pairingCode: String, @Query("type") type: String): Response<Map<String, Any>>
 
     companion object {
-        private const val BASE_URL = "http://10.0.2.2:8080/" // Android Emulator localhost alias
+        private const val BASE_URL = "http://192.168.100.101:8080/" // Android Emulator localhost alias
 
         val instance: ApiService by lazy {
             Retrofit.Builder()
