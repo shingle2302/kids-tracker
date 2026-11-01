@@ -21,8 +21,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.*
+import com.amap.api.maps.AMap
+import com.amap.api.maps.CameraUpdateFactory
 import com.amap.api.maps.MapView
 import com.amap.api.maps.MapsInitializer
+import com.amap.api.maps.model.LatLng
+import com.amap.api.maps.model.MarkerOptions
 
 class MainActivity : ComponentActivity() {
 
@@ -67,6 +71,7 @@ fun ParentMainScreen(savedInstanceState: Bundle?) {
     var serverUrlInput by remember { mutableStateOf("http://192.168.100.101:8080/") }
     var pairingCodeInput by remember { mutableStateOf("888888") }
     var connectedChildInfo by remember { mutableStateOf("暂无绑定设备") }
+    var aMapInstance by remember { mutableStateOf<com.amap.api.maps.AMap?>(null) }
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -108,7 +113,7 @@ fun ParentMainScreen(savedInstanceState: Bundle?) {
                     Button(
                         onClick = {
                             if (pairingCodeInput.isNotEmpty()) {
-                                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                scope.launch(Dispatchers.IO) {
                                     try {
                                         val api = com.shingle.kids.core.api.ApiService.getInstance(serverUrlInput)
                                         val response = api.pairDevice(
@@ -122,15 +127,38 @@ fun ParentMainScreen(savedInstanceState: Bundle?) {
                                             val statusRes = api.getDeviceStatus(pairingCodeInput)
                                             if (statusRes.isSuccessful) {
                                                 val dev = statusRes.body()?.device
-                                                connectedChildInfo = "已连接: ${dev?.childName} | 位置: ${dev?.lastAddress ?: "未定位"} | 电量: ${dev?.batteryLevel}%"
+                                                withContext(Dispatchers.Main) {
+                                                    if (dev != null) {
+                                                        connectedChildInfo = "已连接: ${dev.childName} | 位置: ${dev.lastAddress.ifEmpty { "未定位" }} | 电量: ${dev.batteryLevel}%"
+                                                        if (dev.lastLatitude != 0.0 && dev.lastLongitude != 0.0) {
+                                                            val childLatLng = com.amap.api.maps.model.LatLng(dev.lastLatitude, dev.lastLongitude)
+                                                            aMapInstance?.clear()
+                                                            aMapInstance?.addMarker(
+                                                                com.amap.api.maps.model.MarkerOptions()
+                                                                    .position(childLatLng)
+                                                                    .title(dev.childName)
+                                                                    .snippet(dev.lastAddress)
+                                                            )
+                                                            aMapInstance?.moveCamera(
+                                                                com.amap.api.maps.CameraUpdateFactory.newLatLngZoom(childLatLng, 16f)
+                                                            )
+                                                        }
+                                                    }
+                                                }
                                             } else {
-                                                connectedChildInfo = "配对成功，但获取设备状态失败"
+                                                withContext(Dispatchers.Main) {
+                                                    connectedChildInfo = "配对成功，但获取设备状态失败"
+                                                }
                                             }
                                         } else {
-                                            connectedChildInfo = "配对请求失败: HTTP ${response.code()}"
+                                            withContext(Dispatchers.Main) {
+                                                connectedChildInfo = "配对请求失败: HTTP ${response.code()}"
+                                            }
                                         }
                                     } catch (e: Exception) {
-                                        connectedChildInfo = "连接后端异常: ${e.message}"
+                                        withContext(Dispatchers.Main) {
+                                            connectedChildInfo = "连接后端异常: ${e.message}"
+                                        }
                                     }
                                 }
                             }
@@ -139,7 +167,7 @@ fun ParentMainScreen(savedInstanceState: Bundle?) {
                     ) {
                         Icon(Icons.Default.Link, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("连接后端并同步设备")
+                        Text("连接后端并同步设备位置")
                     }
                     Text(connectedChildInfo, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
@@ -153,12 +181,15 @@ fun ParentMainScreen(savedInstanceState: Bundle?) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(250.dp)
+                            .height(300.dp)
                     ) {
                         AndroidView(
                             factory = { ctx ->
                                 MapView(ctx).apply {
                                     onCreate(savedInstanceState)
+                                    val map = this.map
+                                    aMapInstance = map
+                                    map?.uiSettings?.isZoomControlsEnabled = true
                                 }
                             },
                             modifier = Modifier.fillMaxSize()
