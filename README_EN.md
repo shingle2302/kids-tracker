@@ -1,13 +1,13 @@
 # Kids Tracker - Smart Child Safety & Anti-Lost System
 
-> High-precision AMap GPS tracking, real-time safety distance alert, and 3-layer security authentication.
+> High-precision AMap GPS tracking, real-time safety distance alert, auto-call/SMS/recording evidence, and 3-layer security authentication.
 > Version: v3.0.0 (Commercial & Security Plus)
 
 ---
 
 ## Architecture
 
-- **:child (Child App)**: Runs on the child's device, provides foreground/background continuous high-precision GPS positioning, 10-minute dynamic pairing code (OTP), and anti-uninstall protection.
+- **:child (Child App)**: Runs on the child's device, provides foreground/background continuous high-precision GPS positioning, 10-minute dynamic pairing code (OTP), anti-uninstall protection, and auto-call/SMS/recording upon safe boundary breach.
 - **:parent (Parent App)**: Runs on the parent's device, featuring an immersive full-screen AMap tracking interface, 5-second auto-refresh polling, and safe distance fence alerts (vibration + ringtone + manual silence).
 - **:backend (Spring Boot Backend)**: Spring Boot 3.3 + H2 JPA RESTful server handling device pairing, location relay, command dispatch, and security auth.
 - **:core (Core Library)**: Shared API service definitions and Retrofit data models.
@@ -22,16 +22,21 @@
 
 ---
 
-## Core Features
+## Core Features & Highlights
 
 ### 1. Material 3 Commercial UI
 - **Parent App**: Full-screen AMap, top status bar with 5-second live polling, bottom control card showing battery level, last reported time, and exact address.
 - **Child App**: Guardian-teal theme, large dynamic pairing code card, countdown timer, and step-by-step security permission guide.
 
-### 2. Safe Distance Fence & Alarm
+### 2. Safe Distance Fence & Emergency Actions
 - **Customizable Radius**: 50m, 100m, 200m, 500m, 1000m.
 - **Vibration & Ringtone Linkage**: Triggers strong vibration and alarm sound when the child exceeds the safe distance.
 - **Manual Silence**: Parents can tap the "Stop Ringing/Vibration" button at any time.
+- **Auto-Call / SMS / Recording**: Automatically dials parent's phone, sends precise location SMS, and records 30 seconds of environmental audio evidence upon boundary breach.
+
+### 3. Robust Background Protection
+- **Android 14+ Foreground Service**: Ensures continuous GPS data collection even when running in the background or when the screen is locked.
+- **Anti-Uninstall Protection**: Supports Device Administrator and Accessibility Service plugins to prevent accidental deletion.
 
 ---
 
