@@ -20,7 +20,7 @@
 
         <meta-data
             android:name="com.amap.api.v2.apikey"
-            android:value="REDACTED_PARENT_KEY" />
+            android:value="${AMAP_PARENT_KEY}" />
 
         <activity
             android:name="com.shingle.kids.parent.MainActivity"

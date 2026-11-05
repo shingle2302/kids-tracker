@@ -31,7 +31,7 @@
 
         <meta-data
             android:name="com.amap.api.v2.apikey"
-            android:value="REDACTED_CHILD_KEY" />
+            android:value="${AMAP_CHILD_KEY}" />
 
         <service android:name="com.amap.api.location.APSService" />
 

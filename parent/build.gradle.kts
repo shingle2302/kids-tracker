@@ -1,3 +1,13 @@
+import java.util.Properties
+
+val amapProps = Properties().apply {
+    val file = rootProject.file("amap_keys.properties")
+    if (file.exists()) {
+        load(file.inputStream())
+    }
+}
+val amapParentKey = amapProps.getProperty("AMAP_PARENT_KEY", "REDACTED_PARENT_KEY")
+
 plugins {
     id("com.android.application")
     alias(libs.plugins.kotlin.compose)
@@ -15,6 +25,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders["AMAP_PARENT_KEY"] = amapParentKey
     }
 
     buildTypes {
